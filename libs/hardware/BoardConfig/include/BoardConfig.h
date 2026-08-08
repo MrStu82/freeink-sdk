@@ -1292,6 +1292,7 @@ inline bool hasTouch() { return ACTIVE.touch.controller != TouchController::None
 inline bool hasHomeKey() { return ACTIVE.touch.hasHomeKey; }
 inline bool hasPwmFrontlight() { return ACTIVE.frontlight.gpio != PIN_UNASSIGNED; }
 inline bool hasAudio() { return ACTIVE.audio.output != AudioOutput::None; }
+inline bool hasUsbMassStorage() { return FREEINK_CAP_USB_MSC; }
 
 // Safety guard: a power-latch pin must never coincide with a display or SDMMC
 // bus pin. A latch is driven hard HIGH (asserted) or LOW (power-off) and held

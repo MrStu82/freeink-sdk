@@ -11,6 +11,8 @@ SDCardManager SDCardManager::instance;
 #if FREEINK_SD_SDMMC
 SDCardManager::SDCardManager() {}
 
+FsBlockDeviceInterface* SDCardManager::rawBlockDevice() { return _dev; }
+
 bool SDCardManager::begin() {
   // Native SDMMC: SdFat can't drive SDIO, so mount a plain FsVolume on the esp-idf
   // SDMMC block device. FsFile from this volume is the same type the SPI path
