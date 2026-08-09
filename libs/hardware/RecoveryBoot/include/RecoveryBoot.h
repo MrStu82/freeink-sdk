@@ -23,6 +23,17 @@
 // bootloader falls back to the other OTA slot on its own.) A truly unconditional
 // GPIO recovery would require a custom second-stage bootloader, which the recovery
 // firmware deliberately never reflashes.
+//
+// NOT BUILDABLE AS-IS ON XTEINK X4 PRO (2026-08-09): the Back + Up combo above
+// depends on an ADC resistor ladder (Back=GPIO1, Up=GPIO2) that the X4 Pro board
+// doc (freeink-sdk/docs/xteink-x4pro-support.md) explicitly documents as vestigial
+// firmware, not wired on this variant. The X4 Pro has no Back button and no Up
+// button in any form — only Left(GPIO0)/Right(GPIO7)/Power(GPIO3) digital buttons
+// plus a capacitive Home key via GT911. checkBootCombo() is also not called
+// anywhere in the X4 Pro app today (dead code in that image). Any recovery combo
+// for this board has to be built from its real buttons — don't assume this file
+// already covers it. The ESP32 ROM serial bootloader (GPIO0 low at reset) remains
+// the working escape hatch for a bad flash in the meantime; this gap is not urgent.
 
 namespace freeink {
 namespace recovery {

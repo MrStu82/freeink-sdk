@@ -17,31 +17,34 @@ uint32_t dutyFor(uint32_t pct, uint32_t full, bool activeHigh) {
 }
 
 #if defined(ARDUINO) && ESP_ARDUINO_VERSION_MAJOR >= 3
-void attachChannel(int8_t gpio, uint8_t /*ch*/, uint32_t freq, uint8_t bits) {
-  ledcAttach(gpio, freq, bits);
+bool attachChannel(int8_t gpio, uint8_t /*ch*/, uint32_t freq, uint8_t bits) {
+  return ledcAttach(gpio, freq, bits);
 }
 void writeChannel(int8_t gpio, uint8_t /*ch*/, uint32_t duty) { ledcWrite(gpio, duty); }
 #else
-void attachChannel(int8_t gpio, uint8_t ch, uint32_t freq, uint8_t bits) {
+bool attachChannel(int8_t gpio, uint8_t ch, uint32_t freq, uint8_t bits) {
   ledcSetup(ch, freq, bits);
-  ledcAttachPin(gpio, ch);
+  return ledcAttachPin(gpio, ch);
 }
 void writeChannel(int8_t /*gpio*/, uint8_t ch, uint32_t duty) { ledcWrite(ch, duty); }
 #endif
 }  // namespace
 #endif
 
-void FrontlightManager::begin() {
+bool FrontlightManager::begin() {
 #if FREEINK_CAP_FRONTLIGHT
   const auto& fl = BoardConfig::ACTIVE.frontlight;
-  if (fl.gpio == BoardConfig::PIN_UNASSIGNED) return;
+  if (fl.gpio == BoardConfig::PIN_UNASSIGNED) return true;  // no frontlight on this board
 
-  attachChannel(fl.gpio, LEDC_CH_COOL, fl.pwmFrequency, fl.pwmResolutionBits);
-  if (fl.gpioWarm != BoardConfig::PIN_UNASSIGNED) {
-    attachChannel(fl.gpioWarm, LEDC_CH_WARM, fl.pwmFrequency, fl.pwmResolutionBits);
-  }
+  _coolAttachOk = attachChannel(fl.gpio, LEDC_CH_COOL, fl.pwmFrequency, fl.pwmResolutionBits);
+  _warmAttachOk = fl.gpioWarm == BoardConfig::PIN_UNASSIGNED
+                      ? true  // no second channel on this board — not a failure
+                      : attachChannel(fl.gpioWarm, LEDC_CH_WARM, fl.pwmFrequency, fl.pwmResolutionBits);
   _begun = true;
   setBrightness(0);
+  return _coolAttachOk && _warmAttachOk;
+#else
+  return true;
 #endif
 }
 

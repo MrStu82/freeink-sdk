@@ -174,6 +174,14 @@ The SDK profile uses `InputStyle::DigitalButtons`:
 Note: **GPIO0 is a boot-strap pin.** It works fine as a button as long as it is
 not held during reset.
 
+Note: **`hardware/RecoveryBoot`'s Back+Up boot-combo escape hatch does not work on
+this board.** It reads the vestigial ADC ladder below (Back/Up), which this
+variant doesn't have — this unit has no Back or Up button in any form, only
+Left/Right/Power above plus the GT911 Home key. It's also not called anywhere in
+this board's app today. See `RecoveryBoot.h` for the full note. The ESP32 ROM
+serial bootloader (GPIO0 low at reset) is the working escape hatch for a bad
+flash until/unless a Left/Right/Power/Home-based combo is built for this board.
+
 ### Vestigial ADC ladder (Corrected — unused)
 
 **Corrected:** earlier RE proposed an **ADC resistor ladder** (GPIO10 +

@@ -18,8 +18,11 @@
 
 class FrontlightManager {
  public:
-  // Bring up the PWM channel(s). No-op if the board has no frontlight.
-  void begin();
+  // Bring up the PWM channel(s). No-op (returns true) if the board has no frontlight.
+  // Returns false if the board declares a frontlight but a channel actually failed to
+  // attach — callers should log this, since a channel that never attached still leaves
+  // setBrightness()/setColorTemperature() writing PWM duty to a pin nothing is driving.
+  bool begin();
 
   // Set brightness as a 0-100 percentage. 0 turns the light off. On a warm/cool board
   // this is the TOTAL brightness; the current color-temperature split is preserved.
@@ -55,6 +58,11 @@ class FrontlightManager {
   uint8_t brightness() const { return _brightness; }
   uint8_t colorTemperature() const { return _warmPercent; }
 
+  // Per-channel attach results from the last begin(), for diagnostics (e.g. the
+  // frontlight pin diagnostic activity). Both false before begin() is called.
+  bool coolChannelAttachOk() const { return _coolAttachOk; }
+  bool warmChannelAttachOk() const { return _warmAttachOk; }
+
  private:
 #if FREEINK_CAP_FRONTLIGHT
   // Recompute and write both channels from _brightness + _warmPercent.
@@ -62,6 +70,8 @@ class FrontlightManager {
 #endif
 
   bool _begun = false;
+  bool _coolAttachOk = false;
+  bool _warmAttachOk = false;
   uint8_t _brightness = 0;
   uint8_t _lastBrightness = 50;
   uint8_t _warmPercent = 50;  // neutral by default
