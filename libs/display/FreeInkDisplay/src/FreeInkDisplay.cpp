@@ -172,6 +172,22 @@ void FreeInkDisplay::selectDriver() {
 #endif
       break;
   }
+
+  // Boot-time evidence for which silicon this unit actually bound, since X4/X4 Pro
+  // controller identity is a runtime probe result, not a compile-time fact (see the
+  // PanelSel::X4 case above). Fires once, from begin() -> selectDriver().
+  const char* controllerName = "unknown";
+  switch (BoardConfig::ACTIVE.displayController) {
+    case BoardConfig::DisplayController::SSD1677: controllerName = "SSD1677"; break;
+    case BoardConfig::DisplayController::UC8179: controllerName = "UC8179"; break;
+    case BoardConfig::DisplayController::UC8279: controllerName = "UC8279"; break;
+    case BoardConfig::DisplayController::UC8253: controllerName = "UC8253"; break;
+    case BoardConfig::DisplayController::ED2208: controllerName = "ED2208"; break;
+    case BoardConfig::DisplayController::LgfxEpd: controllerName = "LgfxEpd"; break;
+    case BoardConfig::DisplayController::IT8951: controllerName = "IT8951"; break;
+  }
+  Serial.printf("[EPD] display controller: %s (variant=%u)\n", controllerName,
+                (unsigned)BoardConfig::ACTIVE.displayControllerVariant);
 }
 
 void FreeInkDisplay::begin() {
