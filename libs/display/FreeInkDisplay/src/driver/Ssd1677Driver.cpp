@@ -320,8 +320,12 @@ void Ssd1677Driver::refresh(EpdBus& bus, RefreshMode mode, bool turnOff, bool as
     // not, so 0xCC is correct in both states. The production driver marks power OFF
     // after this pass; mirror that so the next refresh re-enables the rails.
     displayMode = 0xCC;
-    if (turnOff) displayMode |= 0x03;
-    _isScreenOn = false;
+    // 0xCC leaves clock/analog enabled. Keep the state truthful unless this
+    // activation also requests power-off, so deepSleep() cannot skip parking.
+    if (turnOff) {
+      displayMode |= 0x03;
+      _isScreenOn = false;
+    }
   } else {  // Fast
     displayMode |= 0x1C;
   }
@@ -600,15 +604,15 @@ void Ssd1677Driver::deepSleep(EpdBus& bus) {
   // Stock parity (_powerOff): park the border at its init value so it is not left
   // driven with the full-refresh waveform through deep sleep, then power down
   // analog/clock. Stock does not touch CTRL1 here.
-  if (_isScreenOn) {
-    bus.cmd(CMD_BORDER_WAVEFORM);
-    bus.data(_cfg.borderWaveformInit);
-    bus.cmd(CMD_DISPLAY_UPDATE_CTRL2);
-    bus.data(0x03);  // ANALOG_OFF_PHASE | CLOCK_OFF
-    bus.cmd(CMD_MASTER_ACTIVATION);
-    bus.waitBusy(" display power-down");
-    _isScreenOn = false;
-  }
+  // Always park before DSLP. Reissuing the bounded power-off sequence is safe
+  // and protects against any software state drift while the master rail stays up.
+  bus.cmd(CMD_BORDER_WAVEFORM);
+  bus.data(_cfg.borderWaveformInit);
+  bus.cmd(CMD_DISPLAY_UPDATE_CTRL2);
+  bus.data(0x03);  // ANALOG_OFF_PHASE | CLOCK_OFF
+  bus.cmd(CMD_MASTER_ACTIVATION);
+  bus.waitBusy(" display power-down");
+  _isScreenOn = false;
   // Stock parity: deep sleep mode 2 (0x03) discards controller RAM. Nothing may
   // treat RAM as a valid diff baseline after wake — initController() re-arms
   // _needsInitialFull, so the first paint is an absolute clean anyway.

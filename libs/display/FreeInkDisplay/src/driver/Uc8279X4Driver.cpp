@@ -250,11 +250,11 @@ void Uc8279X4Driver::requestResync(uint8_t settlePasses) {
 void Uc8279X4Driver::skipInitialResync() { _needFullClear = false; }
 
 void Uc8279X4Driver::deepSleep(EpdBus& bus) {
-  if (_isScreenOn) {
-    bus.cmd(CMD_POWER_OFF);
-    bus.waitBusy(" 8279x4 power-down");
-    _isScreenOn = false;
-  }
+  // Always issue POF before DSLP; only wait when an active panel has work to
+  // finish, avoiding an unnecessary wait if software state already says off.
+  bus.cmd(CMD_POWER_OFF);
+  if (_isScreenOn) bus.waitBusy(" 8279x4 power-down");
+  _isScreenOn = false;
   bus.cmd(CMD_DEEP_SLEEP);
   bus.data(0xA5);
 }
