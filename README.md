@@ -122,7 +122,7 @@ so the SD manager itself stays device-agnostic.
 | **de-link** | ESP32-S3 | SSD1677 | 800×480 | B/W + grayscale, PWM frontlight, native 4-bit SDMMC SD |
 | **M5Stack PaperColor** | ESP32-S3 | ED2208 | 400×600 Spectra-6 color | native interrupted-refresh driver, optional M5GFX backend, built-in speaker (ES8311 codec + AW8737A amp), 2x RGB LEDs |
 | **Murphy M3** | ESP32-S3 | UC8253 | 240×416 | B/W (90°-rotated framebuffer, full/fast LUTs), CHSC6x touch, PWM frontlight |
-| **LilyGo T5 S3** | ESP32-S3 | ED047TC1 (raw parallel) | 960×540 16-gray | LovyanGFX EPD driver with 16-gray, GT911 touch, PWM backlight, BQ27220/BQ25896 I²C battery |
+| **LILYGO Screen-4.7-S3 V2.4** | ESP32-S3 | ED047TC1 (raw parallel) | 960×540 16-gray | official LilyGo `esp32s3` driver, GT911 touch, PCF8563 RTC, ADC battery, SPI-SD |
 | **M5Paper v1.1** | ESP32 (classic) | IT8951E | 540×960 16-gray ED047TC1 | hand-rolled IT8951 driver (own SPI, 1bpp→4bpp load, GC16/DU/A2 modes, auto rotation onto the portrait panel), GT911 touch, GPIO35 ADC battery |
 | **Sticky** (Upcoming Device) | ESP32-S3 | SSD1677 | 3.97" 800×480 B/W | reuses the SSD1677 driver (X4-class), GT911 touch, PDM microphone (Microphone lib), BQ27220 I²C battery gauge, PCF8563 RTC + SHT40 temp/humidity + LSM6DS3TR-C IMU (Rtc / EnvironmentSensor / Imu libs), SPI MicroSD (shares the display bus), LEDC buzzer (Buzzer lib); orientation/SD-sharing pending hardware validation |
 | **Xteink X4 Pro** | ESP32-S3 | SSD1677 **or** UC8179 (per batch) | 800×480 B/W | GT911 touch, dual warm/cold frontlight, native 1-bit SDMMC, BM8563 RTC, CW2017 battery gauge; controller auto-detected at boot |
@@ -254,7 +254,7 @@ MCU (a C3-vs-S3 mix is a compile error):
 | `-DFREEINK_DEVICE_DELINK` | de-link (S3, SSD1677 + frontlight) |
 | `-DFREEINK_DEVICE_M5` | M5 PaperColor (S3, ED2208 + color) |
 | `-DFREEINK_DEVICE_MURPHY` | Murphy M3 (S3, UC8253 + touch + frontlight) |
-| `-DFREEINK_DEVICE_LILYGO` | LilyGo T5 S3 (S3, ED047TC1 raw-parallel EPD via LovyanGFX) |
+| `-DFREEINK_DEVICE_LILYGO` | LILYGO Screen-4.7-S3 V2.4 (S3, ED047TC1 via pinned official driver) |
 | `-DFREEINK_DEVICE_STICKY` | Sticky (S3, SSD1677 800×480 + GT911 touch + PDM mic) |
 | *(none)* | **compile error** — a build must select at least one device |
 
@@ -286,7 +286,7 @@ tight. Each defaults on when an included device needs it; force with `=0`/`=1`:
 |---|---|
 | `-DFREEINK_DISPLAY_FLIPPED` (or `-DFLIPPED`) | back-compat alias for `BoardProfile.orientation = MIRROR_Y` on SSD1677 |
 | `-DFREEINK_SD_SDMMC=1` | use the native 4-bit SDMMC backend (needs `-DUSE_BLOCK_DEVICE_INTERFACE=1`); auto-on for de-link |
-| `-DFREEINK_BATTERY_I2C_GAUGE=1` | compile the I²C fuel-gauge backend (BQ27220/BQ25896); auto-on for X3, LilyGo, and Sticky. Gauge-vs-ADC is then runtime per profile, so X3 (gauge) + X4 (ADC) coexist in one binary |
+| `-DFREEINK_BATTERY_I2C_GAUGE=1` | compile the I²C fuel-gauge backend (BQ27220/BQ25896); auto-on for X3 and Sticky. Gauge-vs-ADC is then runtime per profile, so X3 (gauge) + X4 (ADC) coexist in one binary |
 | `-DEINK_DISPLAY_SINGLE_BUFFER_MODE=1` | single framebuffer (uses controller RAM as previous frame) |
 | `-DFREEINK_FB_PSRAM=1` | place the facade framebuffer(s) in PSRAM heap (`MALLOC_CAP_SPIRAM`, allocated in `begin()`) instead of static DRAM `.bss`; auto-on for M5Paper, off everywhere else |
 | `-DFREEINK_NET_WOLFSSL=1` | enable the wolfSSL TLS 1.3 transport in `SecureNet` |
@@ -739,32 +739,14 @@ automatically as a dependency of `SDCardManager`.
 
 ### Devices backed by external libraries
 
-A `PanelDriver` doesn't have to emit raw SPI — it can wrap a third-party display
-library. Some panels need this: a raw-parallel EPD with no on-glass controller
-(e.g. the LilyGo T5 S3's ED047TC1) is driven by **LovyanGFX's `Panel_EPD`**
-(bundled in `m5stack/M5GFX`). FreeInk ships exactly that as **`LgfxEpdDriver`**
-(`usesExternalBus()`), and the M5 PaperColor's optional `M5OfficialDriver` wraps
-M5GFX the same way. FreeInk pulls these libraries in **per device**, so builds
-that don't use them stay lean:
-
-1. Put the external `#include` and the driver code **inside the driver's
-   `#if FREEINK_DRIVER_<NAME>` guard** (the flag the registry derives from the
-   device — e.g. `FREEINK_DRIVER_LGFX_EPD`). PlatformIO's LDF (chain mode) only
-   links the external library when that driver actually compiles, so other
-   devices are unaffected.
-2. Add the external library to **that device's env `lib_deps`** in your
-   `platformio.ini` (see `platformio.sample.ini`). It's installed for that env
-   only.
-3. Implement the device's `PanelDriver` as a thin wrapper over the library's API
-   (init/draw/refresh/sleep), exactly like the native drivers — the facade can't
-   tell the difference.
-
-This keeps the SDK's display surface uniform (`EInkDisplay` everywhere) while
-letting each device bring whatever rendering stack it needs. The LilyGo T5 S3 is
-the worked example — see
-[`docs/lilygo-t5s3-support.md`](docs/lilygo-t5s3-support.md) for its bring-up
-(board-injected `LgfxEpdConfig` + power hooks) and the remaining board-support
-gaps (I²C battery gauge, expander button).
+A `PanelDriver` may wrap a board vendor's display library when the panel is not
+an SPI controller. `LilyGoEpd47Driver` is the worked example: it uses the pinned
+official `LilyGo-EPD47` `esp32s3` source for the Screen-4.7-S3 V2.4's ED047TC1
+and 74HCT4094 topology. M5 PaperColor's optional `M5OfficialDriver` separately
+wraps M5GFX. Each dependency is scoped to its device environment so other
+firmware outputs do not change. See
+[`docs/lilygo-t5s3-support.md`](docs/lilygo-t5s3-support.md) for the exact V2.4
+pin and power contract.
 
 ## Repository layout
 

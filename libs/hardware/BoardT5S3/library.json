@@ -1,7 +1,7 @@
 {
   "name": "BoardT5S3",
   "version": "0.1.0",
-  "description": "FreeInk board support for LilyGo T5 S3: pins, PCA9535, TPS65185 EPD power hooks, and user button hook.",
+  "description": "FreeInk board support for LILYGO Screen-4.7-S3 V2.4: exact I2C, SPI-SD, button and probe wiring.",
   "keywords": "lilygo, t5s3, epaper, board",
   "authors": [{"name": "FreeInk SDK Contributors"}],
   "dependencies": {

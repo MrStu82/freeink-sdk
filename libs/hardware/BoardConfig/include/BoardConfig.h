@@ -138,10 +138,14 @@
 #else
 #define FREEINK_DRIVER_UC8253_MURPHY 0
 #endif
-// LilyGo T5 S3: raw-parallel ED047TC1 via LovyanGFX (M5GFX). External-bus driver.
+// LilyGo Screen-4.7-S3 V2.4: raw-parallel ED047TC1 through LilyGo's
+// official esp32s3 driver. Its 74HCT4094 control topology is not compatible
+// with LovyanGFX Bus_EPD's direct power/control pins.
 #if FREEINK_DEVICE_LILYGO
-#define FREEINK_DRIVER_LGFX_EPD 1
+#define FREEINK_DRIVER_LILYGO_EPD47 1
+#define FREEINK_DRIVER_LGFX_EPD 0
 #else
+#define FREEINK_DRIVER_LILYGO_EPD47 0
 #define FREEINK_DRIVER_LGFX_EPD 0
 #endif
 // M5Paper v1.1: ED047TC1 behind an IT8951E timing controller (its own framebuffer
@@ -160,7 +164,7 @@
 #endif
 #ifndef FREEINK_CAP_FRONTLIGHT
 #define FREEINK_CAP_FRONTLIGHT \
-  (FREEINK_DEVICE_DELINK || FREEINK_DEVICE_MURPHY || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_X4PRO)
+  (FREEINK_DEVICE_DELINK || FREEINK_DEVICE_MURPHY || FREEINK_DEVICE_X4PRO)
 #endif
 // USB Mass Storage ("USB Transfer" mode): exposes the SD card to a host over
 // USB-MSC. OPT-IN (default off), NOT board-derived: it forces the build into
@@ -211,7 +215,7 @@
 // share one C3 binary.
 #ifndef FREEINK_BATTERY_I2C_GAUGE
 #define FREEINK_BATTERY_I2C_GAUGE \
-  (FREEINK_DEVICE_X3 || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO)
+  (FREEINK_DEVICE_X3 || FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO)
 #endif
 #ifndef FREEINK_CAP_COLOR
 #define FREEINK_CAP_COLOR (FREEINK_DEVICE_M5)
@@ -331,8 +335,9 @@ enum class InputStyle : uint8_t {
 };
 
 // Panel controller silicon. Drivers are selected from this at begin().
-// LgfxEpd = a raw-parallel EPD with no on-glass controller, driven via LovyanGFX
-// (e.g. ED047TC1 on LilyGo T5 S3).
+// LgfxEpd = a raw-parallel EPD with no on-glass controller. The LilyGo
+// ED047TC1 path uses its official driver because V2.4 control signals are
+// multiplexed through a 74HCT4094 rather than direct GPIOs.
 // UC8179 and UC8279 are the UltraChip siblings that newer batches ship in place
 // of the original controller (UC8179/UC8279 for the X4 family's SSD1677, UC8279d
 // for the X3's UC8253). Same UC81xx KW command family, separate drivers. Which
@@ -886,44 +891,43 @@ constexpr BoardProfile DE_LINK = {Board::DeLink,
                                   {39, 40, 38, 48, 42, 41, 4},  // SDMMC 4-bit: CLK39 CMD40 D0=38 D1=48 D2=42 D3=41
                                   NO_GAUGE};
 
-// --- LilyGo T5 S3 4.7" (ED047TC1 raw-parallel EPD) — ESP32-S3 -----------------
-// 960x540 16-gray raw parallel panel driven via LovyanGFX (FREEINK_DRIVER_LGFX_EPD);
-// the panel can't power up without the board's PMIC (TPS65185) + PCA9535 expander
-// sequence, which the board injects through LgfxEpdConfig::power (see the LilyGo
-// support doc). Geometry is the physical/native landscape scan size; app-level
-// orientation handles rotated reader layouts. Display + GT911 touch + PWM backlight + the I2C fuel gauge
-// (BQ27220/BQ25896) are wired here. The user button (behind the PCA9535 expander),
-// PCF85063 RTC, and LoRa/GPS remain board-support — see docs/lilygo-t5s3-support.md.
+// --- LILYGO Screen-4.7-S3 V2.4 (ED047TC1 raw parallel) — ESP32-S3 ------
+// Authoritative pin source: Xinyuan-LilyGO/LilyGo-EPD47 esp32s3 @
+// 391b0e25d7a39897e3a00af34053250df031d699 (README, src/utilities.h,
+// src/ed047tc1.h) and the Screen-4.7-S3-V2.4 2024-12-03 schematic.
+// The official display driver owns GPIO0 as CFG_STR while running. The board's
+// usable application/wake button is active-low GPIO21; the other side controls
+// are BOOT/CFG_STR (GPIO0) and hard RESET, not independent runtime inputs.
+constexpr TouchConfig LILYGO_EPD47_S3_GT911 = {
+    TouchController::Gt911, 18, 17, 47, PIN_UNASSIGNED, 0x5D, 0, 959, 0, 539,
+    false, 0x14, false, false, PIN_UNASSIGNED, true, false, true};
 constexpr BoardProfile LILYGO_T5S3 = {
     Board::LilyGoT5S3,
-    "lilygo_t5s3",
-    InputStyle::DigitalButtons,  // only BOOT (GPIO0) is a direct GPIO; the user
-                                 // button is behind the PCA9535 expander (board-support)
+    "lilygo_screen_4_7_s3_v2_4",
+    InputStyle::DigitalButtons,
     DisplayController::LgfxEpd,
     960,
     540,
-    {PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED,
-     PIN_UNASSIGNED},                            // no SPI display pins: parallel bus lives in LgfxEpdConfig
-    0,                                           // displaySpiHz n/a (external bus)
-    {14, 21, 13, 12, PIN_UNASSIGNED, false, 0},  // SD over SPI: SCLK14 MISO21 MOSI13 CS12
-    {PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, 0,
-     false},         // power=BOOT (GPIO0), active-low
-    PIN_UNASSIGNED,  // batteryAdc: none — uses the I2C fuel gauge below
+    {PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED,
+     PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED},
+    0,
+    {11, 16, 15, 42, PIN_UNASSIGNED, true, 20000000},
+    {PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED,
+     PIN_UNASSIGNED, PIN_UNASSIGNED, 21, false},
+    14,
     PIN_UNASSIGNED,
     2.0f,
     PIN_UNASSIGNED,
-    LILYGO_T5_PRO_GT911,  // GT911 touch (SDA39 SCL40 INT3 RST9, 0x5D, portrait sensor -> landscape panel)
-    {11, 1000, 8, true},  // backlight: BL_EN GPIO11, PWM <=1 kHz / 8-bit, active-high
+    LILYGO_EPD47_S3_GT911,
+    NO_FRONTLIGHT,
     NO_AUDIO,
     NO_LEDS,
     NO_FLIP,
     NO_SDMMC,
-    {39, 40, 400000, 0x55, 0x6B},  // BQ27220 gauge (0x55) + BQ25896 charger (0x6B) on SDA39/SCL40
+    NO_GAUGE,
     NO_MIC,
-    NO_SENSORS,
-    1.2f,  // uiScale: 4.7" 960x540 touch (~234 PPI) — finger-sized chrome, like Sticky
-    // GPIO2 is RTC_INT on the production T5 4.7 S3 and must remain an input.
-    // The board has no application-controlled power-hold latch.
+    {18, 17, 400000, 0x51, 0, 0, 0, RtcType::Pcf8563, ImuType::None},
+    1.2f,
     {}};
 
 // --- M5Paper v1.1 4.7" (ED047TC1 behind an IT8951E controller) — ESP32 --------
