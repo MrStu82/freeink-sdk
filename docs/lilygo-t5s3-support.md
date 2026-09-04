@@ -8,7 +8,7 @@ Authoritative sources are the `esp32s3` branch of
 [Xinyuan-LilyGO/LilyGo-EPD47](https://github.com/Xinyuan-LilyGO/LilyGo-EPD47),
 pinned at `391b0e25d7a39897e3a00af34053250df031d699`, particularly
 `README.md`, `src/utilities.h`, `src/ed047tc1.h`, and the repository's
-`Screen-4.7-S3-V2.4 24-12-03` schematic. The dependency retains its MIT licence.
+`Screen-4.7-S3-V2.4 24-12-03` schematic. The official repository is GPL-3.0; binary distributions that link this driver must satisfy that licence and provide corresponding source.
 
 ## Exact contract
 

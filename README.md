@@ -742,7 +742,8 @@ automatically as a dependency of `SDCardManager`.
 A `PanelDriver` may wrap a board vendor's display library when the panel is not
 an SPI controller. `LilyGoEpd47Driver` is the worked example: it uses the pinned
 official `LilyGo-EPD47` `esp32s3` source for the Screen-4.7-S3 V2.4's ED047TC1
-and 74HCT4094 topology. M5 PaperColor's optional `M5OfficialDriver` separately
+and 74HCT4094 topology. That upstream dependency is GPL-3.0;
+consumers must preserve its licence/source obligations. M5 PaperColor's optional `M5OfficialDriver` separately
 wraps M5GFX. Each dependency is scoped to its device environment so other
 firmware outputs do not change. See
 [`docs/lilygo-t5s3-support.md`](docs/lilygo-t5s3-support.md) for the exact V2.4
