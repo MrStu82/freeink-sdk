@@ -23,6 +23,8 @@ void beginI2C();
 void prepareSdBus();
 void disableGpsLora();
 bool pca9535Present();
+// Single bounded I2C transaction; Wire's 50 ms timeout is set by beginI2C().
+bool probeI2CAddress(uint8_t address);
 bool readPca9535Pin(uint8_t pin, bool* high);
 bool writePca9535Pin(uint8_t pin, bool high);
 bool setPca9535PinMode(uint8_t pin, uint8_t mode);

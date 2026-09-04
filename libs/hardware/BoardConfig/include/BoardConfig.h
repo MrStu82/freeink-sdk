@@ -913,7 +913,7 @@ constexpr BoardProfile LILYGO_T5S3 = {
     2.0f,
     PIN_UNASSIGNED,
     LILYGO_T5_PRO_GT911,  // GT911 touch (SDA39 SCL40 INT3 RST9, 0x5D, portrait sensor -> landscape panel)
-    {11, 5000, 8, true},  // backlight: BL_EN GPIO11, PWM 5 kHz / 8-bit, active-high
+    {11, 1000, 8, true},  // backlight: BL_EN GPIO11, PWM <=1 kHz / 8-bit, active-high
     NO_AUDIO,
     NO_LEDS,
     NO_FLIP,
@@ -922,9 +922,9 @@ constexpr BoardProfile LILYGO_T5S3 = {
     NO_MIC,
     NO_SENSORS,
     1.2f,  // uiScale: 4.7" 960x540 touch (~234 PPI) — finger-sized chrome, like Sticky
-    // Power latch: main-power MOSFET on GPIO2, driven HIGH first thing in boot
-    // via holdPowerRails() or the board powers off when USB is unplugged.
-    {2}};
+    // GPIO2 is RTC_INT on the production T5 4.7 S3 and must remain an input.
+    // The board has no application-controlled power-hold latch.
+    {}};
 
 // --- M5Paper v1.1 4.7" (ED047TC1 behind an IT8951E controller) — ESP32 --------
 // 540x960 16-gray panel driven through an IT8951E timing controller over SPI

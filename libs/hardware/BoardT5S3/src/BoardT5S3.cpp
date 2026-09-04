@@ -126,8 +126,12 @@ void begin() {
 }
 
 bool pca9535Present() {
+  return probeI2CAddress(T5S3_PCA9535_ADDR);
+}
+
+bool probeI2CAddress(uint8_t address) {
   ScopedI2CLock lock;
-  Wire.beginTransmission(T5S3_PCA9535_ADDR);
+  Wire.beginTransmission(address);
   return Wire.endTransmission() == 0;
 }
 
