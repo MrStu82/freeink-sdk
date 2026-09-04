@@ -850,6 +850,20 @@ bool FreeInkDisplay::supportsStripGrayscale() const {
   return !_inverted && _driver && _driver->supportsStripGrayscale();
 }
 
+bool FreeInkDisplay::supportsNativeGray8() const {
+  return !_inverted && _driver && _driver->supportsNativeGray8();
+}
+
+bool FreeInkDisplay::displayGray8(const uint8_t* gray8, uint16_t stride,
+                                  RefreshMode mode, bool turnOffScreen) {
+  if (!gray8 || !supportsNativeGray8() || stride < displayWidth) return false;
+  syncPendingAsync();
+  _shadowValid = false;
+  _redRamSynced = false;
+  _driver->displayGray8(_bus, gray8, stride, toInternal(mode), turnOffScreen);
+  return true;
+}
+
 void FreeInkDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) {
   syncPendingAsync();
   if (!_inverted) {

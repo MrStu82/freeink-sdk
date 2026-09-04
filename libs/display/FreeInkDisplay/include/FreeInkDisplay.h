@@ -98,6 +98,12 @@ class FreeInkDisplay {
   enum GrayPlane { GRAY_PLANE_LSB, GRAY_PLANE_MSB };
   void writeGrayscalePlaneStrip(GrayPlane plane, const uint8_t* rows, uint16_t yStart, uint16_t numRows);
   bool supportsStripGrayscale() const;
+  bool supportsNativeGray8() const;
+  // Display a full native-resolution Gray8 frame. Returns false without
+  // touching the panel when the selected driver has no native Gray8 path.
+  bool displayGray8(const uint8_t* gray8, uint16_t stride,
+                    RefreshMode mode = FULL_REFRESH,
+                    bool turnOffScreen = false);
   // Restore controller RAM and frameBuffer to the given BW baseline after
   // grayscale. Available in both buffer modes (CrossPoint's dual-buffer HAL
   // wraps it directly).

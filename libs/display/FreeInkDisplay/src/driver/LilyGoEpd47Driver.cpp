@@ -32,20 +32,38 @@ void allocateBuffers(uint16_t widthBytes, uint16_t height) {
   assert(g_gray && g_lsb && g_msb);
 }
 
-void fill4bpp(const uint8_t* base, const uint8_t* lsb, const uint8_t* msb) {
-  for (uint16_t y = 0; y < g_height; ++y) {
-    const size_t planeOffset = static_cast<size_t>(y) * g_widthBytes;
-    const size_t grayOffset = planeOffset * 4;
+void fill4bpp(const uint8_t* base, const uint8_t* lsb, const uint8_t* msb,
+              const lilygo_epd47::RefreshRect& rect) {
+  const uint16_t rectWidthBytes = rect.width / 8;
+  for (uint16_t row = 0; row < rect.height; ++row) {
+    const size_t planeOffset = static_cast<size_t>(rect.y + row) * g_widthBytes + rect.x / 8;
+    const size_t grayOffset = static_cast<size_t>(row) * rectWidthBytes * 4;
     lilygo_epd47::packRow4bpp(base + planeOffset,
                               lsb ? lsb + planeOffset : nullptr,
                               msb ? msb + planeOffset : nullptr,
-                              g_gray + grayOffset, g_widthBytes);
+                              g_gray + grayOffset, rectWidthBytes);
   }
 }
 
-void pushFrame(bool turnOff) {
+void fillGray8(const uint8_t* gray8, uint16_t stride) {
+  for (uint16_t y = 0; y < g_height; ++y) {
+    lilygo_epd47::packGray8Row(gray8 + static_cast<size_t>(y) * stride,
+                               g_gray + static_cast<size_t>(y) * g_widthBytes * 4,
+                               static_cast<size_t>(g_widthBytes) * 8);
+  }
+}
+
+void pushArea(const lilygo_epd47::RefreshRect& rect, bool turnOff) {
+  if (!rect.refresh) {
+    if (turnOff) epd_poweroff_all();
+    return;
+  }
+  const Rect_t area{rect.x, rect.y, rect.width, rect.height};
   epd_poweron();
-  epd_draw_grayscale_image(epd_full_screen(), g_gray);
+  // The official BLACK_ON_WHITE draw assumes a white target. Clear only the
+  // byte-aligned changed area for Fast; clean modes select the full panel.
+  epd_clear_area(area);
+  epd_draw_grayscale_image(area, g_gray);
   if (turnOff) epd_poweroff_all();
   else epd_poweroff();
 }
@@ -73,14 +91,53 @@ void LilyGoEpd47Driver::display(EpdBus& bus, const uint8_t* fb,
                                 const uint8_t* prev, RefreshMode mode,
                                 bool turnOff) {
   (void)bus;
-  (void)prev;
-  (void)mode;
 #if FREEINK_DRIVER_LILYGO_EPD47
-  fill4bpp(fb, nullptr, nullptr);
-  pushFrame(turnOff);
+  const auto plan = lilygo_epd47::planRefresh1bpp(
+      fb, prev, g_widthBytes, g_height, mode == RefreshMode::Fast);
+  if (plan.refresh) fill4bpp(fb, nullptr, nullptr, plan);
+  pushArea(plan, turnOff);
 #else
   (void)fb;
+  (void)prev;
+  (void)mode;
   (void)turnOff;
+#endif
+}
+
+void LilyGoEpd47Driver::displayWindow(EpdBus& bus, const uint8_t* fb,
+                                      const uint8_t* prev, uint16_t x,
+                                      uint16_t y, uint16_t w, uint16_t h,
+                                      bool turnOff) {
+  (void)bus;
+  (void)prev;
+#if FREEINK_DRIVER_LILYGO_EPD47
+  if (!fb || x >= g_widthBytes * 8U || y >= g_height || w == 0 || h == 0) return;
+  const uint16_t x0 = static_cast<uint16_t>(x & ~7U);
+  uint16_t x1 = static_cast<uint16_t>((x + w + 7U) & ~7U);
+  if (x1 > g_widthBytes * 8U) x1 = g_widthBytes * 8U;
+  if (h > g_height - y) h = g_height - y;
+  const lilygo_epd47::RefreshRect plan{x0, y,
+      static_cast<uint16_t>(x1 - x0), h, true, true};
+  fill4bpp(fb, nullptr, nullptr, plan);
+  pushArea(plan, turnOff);
+#else
+  (void)fb; (void)x; (void)y; (void)w; (void)h; (void)turnOff;
+#endif
+}
+
+void LilyGoEpd47Driver::displayGray8(EpdBus& bus, const uint8_t* gray8,
+                                     uint16_t stride, RefreshMode mode,
+                                     bool turnOff) {
+  (void)bus;
+  (void)mode;
+#if FREEINK_DRIVER_LILYGO_EPD47
+  if (!gray8 || stride < g_widthBytes * 8U) return;
+  fillGray8(gray8, stride);
+  const lilygo_epd47::RefreshRect full{0, 0,
+      static_cast<uint16_t>(g_widthBytes * 8U), g_height, true, false};
+  pushArea(full, turnOff);
+#else
+  (void)gray8; (void)stride; (void)turnOff;
 #endif
 }
 
@@ -128,8 +185,10 @@ void LilyGoEpd47Driver::displayGray(EpdBus& bus, const uint8_t* fb,
   (void)lut;
   (void)factoryMode;
 #if FREEINK_DRIVER_LILYGO_EPD47
-  fill4bpp(fb, g_lsb, g_msb);
-  pushFrame(turnOff);
+  const lilygo_epd47::RefreshRect full{0, 0,
+      static_cast<uint16_t>(g_widthBytes * 8U), g_height, true, false};
+  fill4bpp(fb, g_lsb, g_msb, full);
+  pushArea(full, turnOff);
 #else
   (void)fb;
   (void)turnOff;
@@ -140,7 +199,11 @@ void LilyGoEpd47Driver::cleanupGrayscaleBuffers(EpdBus& bus,
                                                  const uint8_t* bw) {
   (void)bus;
 #if FREEINK_DRIVER_LILYGO_EPD47
-  if (bw) fill4bpp(bw, nullptr, nullptr);
+  if (bw) {
+    const lilygo_epd47::RefreshRect full{0, 0,
+        static_cast<uint16_t>(g_widthBytes * 8U), g_height, true, false};
+    fill4bpp(bw, nullptr, nullptr, full);
+  }
 #else
   (void)bw;
 #endif
