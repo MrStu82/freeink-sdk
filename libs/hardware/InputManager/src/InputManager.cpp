@@ -3,6 +3,9 @@
 #if FREEINK_CAP_TOUCH
 #include <Wire.h>
 #include <driver/gpio.h>
+#if FREEINK_DEVICE_LILYGO
+#include <esp_sleep.h>
+#endif
 #endif
 #if defined(TOUCH_PROBE_DEBUG)
 #include <esp_rom_sys.h>
@@ -835,6 +838,23 @@ void InputManager::beginGt911() {
     delay(50);
   }
 
+  // Screen-4.7-S3 V2.4 has no software-controlled GT911 reset. Its official
+  // esp32s3 sequence wakes a possibly sleeping controller by driving INT high
+  // before scanning 0x14/0x5D. Without this, a controller left asleep by the
+  // previous firmware never ACKs and touch remains disabled for the whole boot.
+#if FREEINK_DEVICE_LILYGO
+  const bool resetlessWake = t.reset < 0 && t.irq >= 0;
+  if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED) {
+    delay(1000); // Official board requirement before addressing after sleep.
+  }
+  if (resetlessWake) {
+    pinMode(t.irq, OUTPUT);
+    digitalWrite(t.irq, HIGH);
+  }
+#else
+  constexpr bool resetlessWake = false;
+#endif
+
   if (t.sda >= 0 && t.scl >= 0) {
     Wire.begin(t.sda, t.scl, 400000);
     Wire.setTimeOut(10);
@@ -875,10 +895,15 @@ void InputManager::beginGt911() {
   // try the primary-select level first, then the alternate level before
   // declaring the touch controller absent.
   gt911Addr = 0;
-  resetWithIntLevel(LOW);
-  if (!probeCandidates()) {
-    resetWithIntLevel(HIGH);
+  if (resetlessWake) {
     probeCandidates();
+    pinMode(t.irq, INPUT);
+  } else {
+    resetWithIntLevel(LOW);
+    if (!probeCandidates()) {
+      resetWithIntLevel(HIGH);
+      probeCandidates();
+    }
   }
 
   touchDataEnabled = (gt911Addr != 0);
