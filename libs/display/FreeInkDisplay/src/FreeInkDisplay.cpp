@@ -854,6 +854,10 @@ bool FreeInkDisplay::supportsNativeGray8() const {
   return !_inverted && _driver && _driver->supportsNativeGray8();
 }
 
+bool FreeInkDisplay::supportsNativeGray8Window() const {
+  return !_inverted && _driver && _driver->supportsNativeGray8Window();
+}
+
 bool FreeInkDisplay::displayGray8(const uint8_t* gray8, uint16_t stride,
                                   RefreshMode mode, bool turnOffScreen) {
   if (!gray8 || !supportsNativeGray8() || stride < displayWidth) return false;
@@ -862,6 +866,17 @@ bool FreeInkDisplay::displayGray8(const uint8_t* gray8, uint16_t stride,
   _redRamSynced = false;
   _driver->displayGray8(_bus, gray8, stride, toInternal(mode), turnOffScreen);
   return true;
+}
+
+bool FreeInkDisplay::displayGray8Window(const uint8_t* gray8, uint16_t stride,
+                                        uint16_t x, uint16_t y, uint16_t w,
+                                        uint16_t h, bool turnOffScreen) {
+  if (!gray8 || !supportsNativeGray8Window() || stride < w) return false;
+  syncPendingAsync();
+  _shadowValid = false;
+  _redRamSynced = false;
+  return _driver->displayGray8Window(_bus, gray8, stride, x, y, w, h,
+                                     turnOffScreen);
 }
 
 void FreeInkDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) {

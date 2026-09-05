@@ -104,9 +104,16 @@ class PanelDriver {
   // Native Gray8 is an opt-in capability for panels with more than the shared
   // two-plane AA representation. Unsupported controllers remain unchanged.
   virtual bool supportsNativeGray8() const { return false; }
+  virtual bool supportsNativeGray8Window() const { return false; }
   virtual void displayGray8(EpdBus& bus, const uint8_t* gray8, uint16_t stride,
                             RefreshMode mode, bool turnOff) {
     (void)bus; (void)gray8; (void)stride; (void)mode; (void)turnOff;
+  }
+  virtual bool displayGray8Window(EpdBus& bus, const uint8_t* gray8, uint16_t stride,
+                                  uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                                  bool turnOff) {
+    (void)bus; (void)gray8; (void)stride; (void)x; (void)y; (void)w; (void)h; (void)turnOff;
+    return false;
   }
   // Display `fb` as the base frame for a grayscale overlay that follows.
   // X3 runs the OEM pipeline (the "AA-pre-BW(mid)" bank as a differential

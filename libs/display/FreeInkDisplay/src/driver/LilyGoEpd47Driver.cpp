@@ -53,6 +53,15 @@ void fillGray8(const uint8_t* gray8, uint16_t stride) {
   }
 }
 
+void fillGray8Window(const uint8_t* gray8, uint16_t stride, uint16_t width,
+                     uint16_t height) {
+  for (uint16_t row = 0; row < height; ++row) {
+    lilygo_epd47::packGray8Row(gray8 + static_cast<size_t>(row) * stride,
+                               g_gray + static_cast<size_t>(row) * (width / 2U),
+                               width);
+  }
+}
+
 void pushArea(const lilygo_epd47::RefreshRect& rect, bool turnOff) {
   if (!rect.refresh) {
     if (turnOff) epd_poweroff_all();
@@ -138,6 +147,27 @@ void LilyGoEpd47Driver::displayGray8(EpdBus& bus, const uint8_t* gray8,
   pushArea(full, turnOff);
 #else
   (void)gray8; (void)stride; (void)turnOff;
+#endif
+}
+
+bool LilyGoEpd47Driver::displayGray8Window(EpdBus& bus, const uint8_t* gray8,
+                                           uint16_t stride, uint16_t x,
+                                           uint16_t y, uint16_t w, uint16_t h,
+                                           bool turnOff) {
+  (void)bus;
+#if FREEINK_DRIVER_LILYGO_EPD47
+  if (!gray8 || w == 0 || h == 0 || (x & 1U) || (w & 1U) || stride < w ||
+      x >= g_widthBytes * 8U || y >= g_height || w > g_widthBytes * 8U - x ||
+      h > g_height - y) {
+    return false;
+  }
+  fillGray8Window(gray8, stride, w, h);
+  const lilygo_epd47::RefreshRect area{x, y, w, h, true, true};
+  pushArea(area, turnOff);
+  return true;
+#else
+  (void)gray8; (void)stride; (void)x; (void)y; (void)w; (void)h; (void)turnOff;
+  return false;
 #endif
 }
 
