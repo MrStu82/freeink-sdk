@@ -850,6 +850,9 @@ void InputManager::beginGt911() {
   if (resetlessWake) {
     pinMode(t.irq, OUTPUT);
     digitalWrite(t.irq, HIGH);
+    delay(5);
+    pinMode(t.irq, INPUT_PULLUP);
+    delay(50);
   }
 #else
   constexpr bool resetlessWake = false;
@@ -884,6 +887,14 @@ void InputManager::beginGt911() {
       Wire.beginTransmission(a);
       if (Wire.endTransmission() == 0) {
         gt911Addr = a;
+        if (resetlessWake) {
+          uint8_t productId[4] = {};
+          if (!gt911ReadReg(0x8140, productId, sizeof(productId))) {
+            gt911Addr = 0;
+            continue;
+          }
+          gt911ClearStatus();
+        }
         return true;
       }
     }
@@ -897,7 +908,6 @@ void InputManager::beginGt911() {
   gt911Addr = 0;
   if (resetlessWake) {
     probeCandidates();
-    pinMode(t.irq, INPUT);
   } else {
     resetWithIntLevel(LOW);
     if (!probeCandidates()) {
