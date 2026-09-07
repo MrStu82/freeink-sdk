@@ -1,4 +1,8 @@
 #include "InputManager.h"
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+#include "DeckTouchTrace.h"
+#endif
+
 
 #if FREEINK_CAP_TOUCH
 #include <Wire.h>
@@ -907,6 +911,10 @@ void InputManager::beginGt911() {
   }
 
   touchDataEnabled = (gt911Addr != 0);
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+  deck_trace::initAddress=gt911Addr; deck_trace::initEnabled=touchDataEnabled;
+#endif
+
 #ifdef TOUCH_PROBE_DEBUG
   touchDebugPrintf("[touch] GT911 probe: addr=0x%02X enabled=%d (sda=%d scl=%d "
                    "cand=0x%02X/0x%02X)\n",
@@ -941,17 +949,33 @@ void InputManager::gt911ClearStatus() {
   Wire.write(0x81);
   Wire.write(0x4E);
   Wire.write(static_cast<uint8_t>(0x00));
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+  const auto traceClearResult = Wire.endTransmission();
+  deck_trace::clear(millis(), traceClearResult);
+#else
   Wire.endTransmission();
+#endif
 }
 
 void InputManager::pollGt911(const unsigned long now) {
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+  deck_trace::poll(now, digitalRead(BoardConfig::ACTIVE.touch.irq));
+#endif
+
   if (gt911Addr == 0) {
     return;
   }
   uint8_t status = 0;
   if (!gt911ReadReg(0x814E, &status, 1)) {
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+    deck_trace::status(now,-1);
+#endif
     return;
   }
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+  deck_trace::status(now,status);
+#endif
+
 
   // Capacitive home key long-press (status bit 0x10). Fire from the LATCHED
   // down-state + wall clock, BEFORE the buffer-ready gate below: a motionless
@@ -1011,9 +1035,16 @@ void InputManager::pollGt911(const unsigned long now) {
       if (t.flipY)
         touchPoint.y =
             static_cast<uint16_t>((t.rawMaxY - t.rawMinY) - touchPoint.y);
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+      deck_trace::point(now,pt,rawX,rawY,touchPoint.x,touchPoint.y);
+#endif
       touchPoint.timestamp = now;
       if (!touchPressed) {
         touchPressedEvent = true;
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+        deck_trace::event(now,"down");
+#endif
+
         touchDownPoint = touchPoint; // first contact sample, used for tap
                                      // routing (wasTouchTap)
         touchMovedBeyondTapSlop = false;
@@ -1035,9 +1066,16 @@ void InputManager::pollGt911(const unsigned long now) {
 #endif
       touchPressed = true;
     }
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+    else {deck_trace::pointError(now);}
+#endif
   } else {
     if (touchPressed) {
       touchReleasedEvent = true;
+#if FREEINK_DEVICE_LILYGO && defined(DECK_TOUCH_TRACE)
+      deck_trace::event(now,"up");
+#endif
+
       lastTouchHeldDurationMs = now - touchDownPoint.timestamp;
       touchUpPoint = touchPoint; // last contact sample, used for swipe routing
     }
