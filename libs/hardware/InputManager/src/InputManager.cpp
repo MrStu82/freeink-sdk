@@ -957,6 +957,10 @@ void InputManager::pollGt911(const unsigned long now) {
   touchHomeKeyDown = homeKeyDown;
 
   const uint8_t count = status & 0x0F;
+  if (count > 5) { // GT911 tracks at most 5 points: corrupt frame, drop it
+    gt911ClearStatus();
+    return;
+  }
   if (count > 0) {
     uint8_t pt[8] = {};
     if (gt911ReadReg(0x8150, pt, 8)) {

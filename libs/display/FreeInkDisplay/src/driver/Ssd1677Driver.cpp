@@ -381,12 +381,9 @@ void Ssd1677Driver::displayImpl(EpdBus& bus, const uint8_t* fb, const uint8_t* p
     if (_needsInitialFull) {
       // First paint after boot/wake must not be a differential FAST: it only drives
       // pixels that differ from the RED baseline, so it can't clear whatever is
-      // physically on the panel (the boot screen) and that ghosts through. But a HALF
-      // or FULL the caller already asked for is non-differential (BYPASS_RED) and
-      // clears the panel + seeds the baseline on its own — honor it and just consume
-      // the one-shot. Only upgrade a FAST request. This keeps the boot logo (a HALF)
-      // from paying an extra multi-inversion FULL-waveform flash on top of its own.
-      if (mode == RefreshMode::Fast) mode = RefreshMode::Full;
+      // physically on the panel (the boot screen) and that ghosts through. Every
+      // mode becomes the board's clean primitive (HALF, or FULL without one), and
+      // the one-shot is consumed.
       _needsInitialFull = false;
       mode = (_cfg.halfSeqOverride != 0) ? RefreshMode::Half : RefreshMode::Full;
     } else if (!_isScreenOn && _cfg.fullSeqOverride == 0) {

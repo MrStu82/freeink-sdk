@@ -214,6 +214,9 @@ void EpdBus::waitBusy(BusyPolarity p, const char* tag) {
   }
 
   if (hookFired && _busyWaitEndHook != nullptr) _busyWaitEndHook();
+  if (millis() - start > 30000 && Serial) {
+    Serial.printf("[%lu] [ERR] BUSY wait timed out: %s\n", millis(), tag ? tag : "?");
+  }
   if (p == BusyPolarity::X3TwoPhase && !x3SawLow) return;
 
   if (tag && Serial) {
@@ -278,8 +281,11 @@ void EpdBus::waitRefreshComplete(const char* tag) {
   // Long sleep — fire the power hooks (if any) around it, matching the poll path.
   const bool hook = (_busyWaitBeginHook != nullptr);
   if (hook) _busyWaitBeginHook();
-  xSemaphoreTake(s_epdRefreshDone, pdMS_TO_TICKS(30000));
+  const bool done = xSemaphoreTake(s_epdRefreshDone, pdMS_TO_TICKS(30000)) == pdTRUE;
   if (hook && _busyWaitEndHook != nullptr) _busyWaitEndHook();
+  if (!done && Serial) {
+    Serial.printf("[%lu] [ERR] BUSY refresh wait timed out: %s\n", millis(), tag ? tag : "?");
+  }
 
   detachInterrupt(digitalPinToInterrupt(_pins.busy));
   if (tag && Serial) {
