@@ -127,7 +127,7 @@ static Ssd1677Config fastDuRefreshShortcut(Ssd1677Config base) {
 // long reading sessions across temperatures on your panel (~85 ms/refresh win).
 // A d2-class board that shares this panel can reuse ssd1677X4Config() or build
 // its own base and layer the same shortcut(s).
-#ifdef FREEINK_X4_FAST_DU_SHORTCUT
+#if defined(FREEINK_X4_FAST_DU_SHORTCUT) || defined(FREEINK_X4PRO_FAST_DU_SHORTCUT)
 static const Ssd1677Config& ssd1677X4Config() {
   static const Ssd1677Config cfg = fastDuRefreshShortcut(ssd1677DefaultConfig());
   return cfg;
@@ -634,7 +634,13 @@ static const Ssd1677Config& ssd1677ActiveConfig() {
     case BoardConfig::Board::Sticky: return ssd1677StickyConfig();
     // X4 Pro runs on the stock X4/GDEQ0426T82 config — same controller and panel
     // class, confirmed painting on hardware. No custom LUT or drive voltages needed.
+    // -DFREEINK_X4PRO_FAST_DU_SHORTCUT opts the X4 Pro into the same fast-DU
+    // shortcut (unvalidated on this panel; the every-N HALF refresh still runs).
+#ifdef FREEINK_X4PRO_FAST_DU_SHORTCUT
+    case BoardConfig::Board::XteinkX4Pro: return ssd1677X4Config();
+#else
     case BoardConfig::Board::XteinkX4Pro: return ssd1677DefaultConfig();
+#endif
     // X4 layers the fast-DU shortcut on the default only when the build has
     // opted in (see ssd1677X4Config); stock 0xFC parity otherwise.
 #ifdef FREEINK_X4_FAST_DU_SHORTCUT
