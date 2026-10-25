@@ -118,6 +118,8 @@ bool matchUc81xx(const uint8_t ver[5], uint8_t flg) {
 }
 
 bool runDisplayProbePass(const EpdProbePins& p, uint8_t ver[5], uint8_t* flg, uint8_t rstLowMs) {
+  // Release the X4 Pro deep-sleep holds on the bus lines before driving them.
+  for (const int8_t pin : {p.cs, p.sclk, p.dc, p.mosi}) gpio_hold_dis(static_cast<gpio_num_t>(pin));
   pinMode(p.cs, OUTPUT);
   digitalWrite(p.cs, HIGH);
   pinMode(p.sclk, OUTPUT);

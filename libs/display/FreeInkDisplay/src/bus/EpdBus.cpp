@@ -45,6 +45,11 @@ void EpdBus::begin(const EpdPins& pins, uint32_t spiHz, BusyPolarity busy, int8_
     delay(100);
   }
 
+  // Release the X4 Pro deep-sleep holds on the bus lines (see
+  // powerDownRailsForSleep()); no-op on pins that were never held.
+  for (const int8_t pin : {pins.cs, pins.sclk, pins.mosi, pins.dc}) {
+    if (pin >= 0) gpio_hold_dis(static_cast<gpio_num_t>(pin));
+  }
   SPI.begin(pins.sclk, spiMiso, pins.mosi, pins.cs);
 
   pinMode(pins.cs, OUTPUT);

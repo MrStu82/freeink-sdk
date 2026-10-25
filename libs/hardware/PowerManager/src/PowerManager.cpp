@@ -81,6 +81,15 @@ void PowerManager::powerDownRailsForSleep() {
   // release the hold before issuing a reset pulse on wake.
   const uint8_t resetSleepLevel = b.display.powerEnable >= 0 ? LOW : HIGH;
   holdRailOff(b.display.rst, resetSleepLevel);
+#if FREEINK_DEVICE_X4PRO
+  // X4 Pro keeps the SSD1677 powered (GPIO1 stays HIGH), and its inputs must not
+  // float: hold CS deselected HIGH and SCLK/MOSI/DC LOW. Released on wake by
+  // XteinkDetect and EpdBus::begin() before they drive the bus.
+  holdRailOff(b.display.cs, HIGH);
+  holdRailOff(b.display.sclk, LOW);
+  holdRailOff(b.display.mosi, LOW);
+  holdRailOff(b.display.dc, LOW);
+#endif
   holdRailOff(b.display.powerEnable, LOW);
   // SD enable OFF = the inactive level: LOW for active-high enables, HIGH for the
   // active-low ones (e.g. X4 Pro's GPIO5, which powers the card while held LOW).
