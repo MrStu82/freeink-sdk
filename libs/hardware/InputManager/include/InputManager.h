@@ -174,6 +174,13 @@ public:
   // swipes so gestures that complete during e-paper refreshes are not lost.
   bool popSwipe(float &nxStart, float &nyStart, float &nxEnd, float &nyEnd);
 
+#if FREEINK_DEVICE_PICCO
+  // --- Slide switch (Onyx Picco, BoardConfig::Picco::toggleSwitch) -----------
+  // Reported as a debounced level, not a button press. Inert on other boards.
+  bool hasToggleSwitch() const { return BoardConfig::isPicco(); }
+  bool isToggleSwitchOn() const { return toggleSwitchOn; }
+#endif
+
   // --- Diagnostics -----------------------------------------------------------
   // A live sample of one button-group ADC pin: the raw reading plus the BTN_*
   // it currently classifies as (-1 = no band matched). On the Xteink ADC ladder
@@ -229,6 +236,10 @@ private:
 #if FREEINK_DEVICE_PICCO
   void beginTma525c();               // Onyx Picco Parade TMA525C (I2C 0x24) init/reset
   void pollTma525c(unsigned long now);
+  void updateToggleSwitch(unsigned long now);
+  bool toggleSwitchOn = false;
+  bool toggleSwitchRaw = false;
+  unsigned long toggleSwitchRawSince = 0;
 #endif
 
   uint8_t currentState;

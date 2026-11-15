@@ -38,6 +38,10 @@ class FrontlightManager {
 
   bool present() const {
 #if FREEINK_CAP_FRONTLIGHT
+#if FREEINK_DEVICE_PICCO
+    // Picco's dual-channel I2C LED driver is present only after begin() gets an ACK.
+    if (BoardConfig::isPicco()) return _begun;
+#endif
     return BoardConfig::ACTIVE.frontlight.gpio != BoardConfig::PIN_UNASSIGNED;
 #else
     return false;  // frontlight code not compiled in (FREEINK_CAP_FRONTLIGHT=0)
@@ -48,6 +52,9 @@ class FrontlightManager {
   // something. False on single-channel frontlights and on boards with none.
   bool hasColorTemperature() const {
 #if FREEINK_CAP_FRONTLIGHT
+#if FREEINK_DEVICE_PICCO
+    if (BoardConfig::isPicco()) return _begun;  // warm + cool channels
+#endif
     return BoardConfig::ACTIVE.frontlight.gpio != BoardConfig::PIN_UNASSIGNED &&
            BoardConfig::ACTIVE.frontlight.gpioWarm != BoardConfig::PIN_UNASSIGNED;
 #else
@@ -67,6 +74,14 @@ class FrontlightManager {
 #if FREEINK_CAP_FRONTLIGHT
   // Recompute and write both channels from _brightness + _warmPercent.
   void apply();
+#if FREEINK_DEVICE_PICCO
+  // Onyx Picco I2C LED driver at Picco::frontlightAddr (lifted from upstream SDK).
+  bool piccoWrite(uint8_t reg, uint8_t value);
+  bool piccoUpdate(uint8_t reg, uint8_t mask, uint8_t value);
+  bool configurePicco();
+  void applyPicco();
+  bool _i2cConfigured = false;
+#endif
 #endif
 
   bool _begun = false;

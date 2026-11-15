@@ -70,6 +70,15 @@ public:
     //     a board with a gauge but no charger IC (e.g. X3) still reports it.
     bool isCharging() const;
 
+#if FREEINK_DEVICE_PICCO
+    // Onyx Picco SGM41562 charger (BoardConfig::Picco::chargerAddr), lifted from
+    // the upstream SDK.
+    // One-time charger setup at boot: replays the stock init (FUN_4200a2d0),
+    // including the 4.35 V charge voltage for the Picco's high-voltage cell, and
+    // only when REG0B reads 0, as stock does. False (no change) otherwise.
+    static bool configureCharger();
+#endif
+
     // Percentage (0-100) from a millivolt value
     static uint16_t percentageFromMillivolts(uint16_t millivolts);
 

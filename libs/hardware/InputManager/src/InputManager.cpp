@@ -89,6 +89,13 @@ void InputManager::begin() {
       pinMode(pin, INPUT_PULLUP);
     }
   }
+#if FREEINK_DEVICE_PICCO
+  if (hasToggleSwitch()) {
+    pinMode(BoardConfig::Picco::toggleSwitch, INPUT_PULLUP);
+    toggleSwitchOn = toggleSwitchRaw =
+        digitalRead(BoardConfig::Picco::toggleSwitch) == LOW;
+  }
+#endif
   beginTouch();
 }
 
@@ -393,6 +400,9 @@ void InputManager::update() {
   touchHomeKeyEvent = false;
   touchHomeKeyTapEvent = false;
   touchHomeKeyLongEvent = false;
+#if FREEINK_DEVICE_PICCO
+  updateToggleSwitch(currentTime);
+#endif
 
   if (BoardConfig::ACTIVE.inputStyle ==
       BoardConfig::InputStyle::DigitalConfirmBackHold) {
@@ -419,6 +429,21 @@ void InputManager::update() {
     }
   }
 }
+
+#if FREEINK_DEVICE_PICCO
+void InputManager::updateToggleSwitch(const unsigned long now) {
+  if (!hasToggleSwitch())
+    return;
+  const bool raw = digitalRead(BoardConfig::Picco::toggleSwitch) == LOW;
+  if (raw != toggleSwitchRaw) {
+    toggleSwitchRaw = raw;
+    toggleSwitchRawSince = now;
+  } else if (raw != toggleSwitchOn &&
+             now - toggleSwitchRawSince > DEBOUNCE_DELAY) {
+    toggleSwitchOn = raw;
+  }
+}
+#endif
 
 bool InputManager::isPressed(const uint8_t buttonIndex) const {
   return currentState & (1 << buttonIndex);

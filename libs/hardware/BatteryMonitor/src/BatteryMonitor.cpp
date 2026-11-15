@@ -233,6 +233,76 @@ bool readM5Pm1Reg16(uint8_t reg, uint16_t& out) {
 }
 }  // namespace
 
+#if FREEINK_DEVICE_PICCO
+#include <Wire.h>
+
+namespace {
+constexpr uint8_t SGM41562_REG_STATUS = 0x08;  // CHRG_STAT [4:3]
+
+// The charger shares the touch/frontlight bus (Wire on SDA7/SCL8).
+TwoWire& piccoChargerWire() {
+  static bool begun = false;
+  if (!begun) {
+    Wire.begin(BoardConfig::Picco::i2cSda, BoardConfig::Picco::i2cScl, BoardConfig::Picco::i2cHz);
+    begun = true;
+  }
+  return Wire;
+}
+
+bool piccoChargerRead(uint8_t reg, uint8_t& out) {
+  TwoWire& w = piccoChargerWire();
+  w.beginTransmission(BoardConfig::Picco::chargerAddr);
+  w.write(reg);
+  if (w.endTransmission(false) != 0) return false;
+  if (w.requestFrom(BoardConfig::Picco::chargerAddr, static_cast<uint8_t>(1), static_cast<uint8_t>(true)) < 1)
+    return false;
+  out = w.read();
+  return true;
+}
+
+bool piccoChargerWrite(uint8_t reg, uint8_t val) {
+  TwoWire& w = piccoChargerWire();
+  w.beginTransmission(BoardConfig::Picco::chargerAddr);
+  w.write(reg);
+  w.write(val);
+  return w.endTransmission() == 0;
+}
+
+// CHRG_STAT [4:3]: 01 pre-charge or 10 fast-charge means charging (11 = done).
+bool piccoCharging(bool& known) {
+  uint8_t status = 0;
+  known = piccoChargerRead(SGM41562_REG_STATUS, status);
+  if (!known) return false;
+  const uint8_t chrg = (status >> 3) & 0x03;
+  return chrg == 0x01 || chrg == 0x02;
+}
+}  // namespace
+
+bool BatteryMonitor::configureCharger() {
+  if (!BoardConfig::isPicco()) return false;
+  uint8_t gate = 0xFF;
+  if (!piccoChargerRead(0x0B, gate) || gate != 0) return false;
+  // {register, mask, value}, in stock order (FUN_4200a2d0, build 2912).
+  static const uint8_t steps[][3] = {
+      {0x05, 0x60, 0x00},  // FUN_4200a1dc(0)
+      {0x02, 0x7F, 0x3E},
+      {0x06, 0x80, 0x80},  // FUN_4200a1c0(1)
+      {0x01, 0x08, 0x00},  // FUN_4200a17c(1)
+      {0x04, 0xFE, 0xAA},  // FUN_4200a260(4350): charge voltage code 85 = 4.35 V
+      {0x0C, 0x02, 0x00},  // FUN_4200a1a0(2800)
+      {0x0D, 0xF8, 0x48},  // FUN_4200a214(50)
+      {0x01, 0xE0, 0x00},  // FUN_4200a294(8, 2)
+  };
+  for (const auto& s : steps) {
+    uint8_t old = 0;
+    if (!piccoChargerRead(s[0], old)) return false;
+    const uint8_t next = static_cast<uint8_t>((old & ~s[1]) | (s[2] & s[1]));
+    if (next != old && !piccoChargerWrite(s[0], next)) return false;
+  }
+  return true;
+}
+#endif
+
 BatteryMonitor::BatteryMonitor()
     : BatteryMonitor(BoardConfig::ACTIVE.batteryAdc, BoardConfig::ACTIVE.batteryDividerMultiplier,
                      BoardConfig::ACTIVE.batteryChargeStatus) {}
@@ -393,6 +463,13 @@ bool BatteryMonitor::isCharging() const {
     Status status;
     return readM5Pm1Status(status) && status.chargingKnown && status.charging;
   }
+#if FREEINK_DEVICE_PICCO
+  if (BoardConfig::isPicco()) {
+    bool known = false;
+    const bool charging = piccoCharging(known);
+    return known && charging;
+  }
+#endif
   if (_chargeStatusPin < 0) {
     return false;
   }
