@@ -23,6 +23,9 @@
 #if FREEINK_DRIVER_SSD1677
 #include "driver/Ssd1677Driver.h"
 #endif
+#if FREEINK_DEVICE_PICCO
+#include "driver/Ssd2677Driver.h"
+#endif
 #if FREEINK_DRIVER_UC8253_X3
 #include "driver/Uc8253X3Driver.h"
 #endif
@@ -155,6 +158,14 @@ void FreeInkDisplay::selectDriver() {
         break;
       }
 #endif
+#if FREEINK_DEVICE_PICCO
+      // Onyx Picco: the panel ID decides between the SSD1677 panels and the
+      // SE0400NQW47 on the stock "SSD2677" path (upstream 5e94fe7).
+      if (BoardConfig::isPicco() && piccoProbePanel() == PiccoSe0400nqw47) {
+        _driver = &ssd2677Driver();
+        break;
+      }
+#endif
 #if FREEINK_DRIVER_SSD1677
       _driver = &ssd1677Driver();
 #elif FREEINK_DRIVER_UC8253_MURPHY
@@ -186,6 +197,9 @@ void FreeInkDisplay::selectDriver() {
     case BoardConfig::DisplayController::LgfxEpd: controllerName = "LgfxEpd"; break;
     case BoardConfig::DisplayController::IT8951: controllerName = "IT8951"; break;
   }
+#if FREEINK_DEVICE_PICCO
+  if (_driver == &ssd2677Driver()) controllerName = "SSD2677";
+#endif
   Serial.printf("[EPD] display controller: %s (variant=%u)\n", controllerName,
                 (unsigned)BoardConfig::ACTIVE.displayControllerVariant);
 }
