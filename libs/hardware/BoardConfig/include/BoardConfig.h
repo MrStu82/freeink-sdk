@@ -57,10 +57,14 @@
 #ifndef FREEINK_DEVICE_STICKY
 #define FREEINK_DEVICE_STICKY 0
 #endif
+#ifndef FREEINK_DEVICE_PICCO
+#define FREEINK_DEVICE_PICCO 0
+#endif
 
 // --- 2) Coherence: exactly one MCU family, at least one device ---------------
 #if !(FREEINK_DEVICE_X4 || FREEINK_DEVICE_X3 || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_M5 || FREEINK_DEVICE_MURPHY || \
-      FREEINK_DEVICE_DELINK || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_M5PAPER || FREEINK_DEVICE_STICKY)
+      FREEINK_DEVICE_DELINK || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_M5PAPER || FREEINK_DEVICE_STICKY || \
+      FREEINK_DEVICE_PICCO)
 #error \
     "FreeInk: no device selected. Pass at least one -DFREEINK_DEVICE_<NAME> (X4, X3, X4PRO, M5, MURPHY, DELINK, LILYGO, M5PAPER, STICKY) in your build env — see platformio.sample.ini."
 #endif
@@ -71,7 +75,7 @@
 #define FREEINK_MCU_C3 (FREEINK_DEVICE_X3 || FREEINK_DEVICE_X4)
 #define FREEINK_MCU_S3                                                                                    \
   (FREEINK_DEVICE_M5 || FREEINK_DEVICE_MURPHY || FREEINK_DEVICE_DELINK || FREEINK_DEVICE_LILYGO ||        \
-   FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO)
+   FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_PICCO)
 #define FREEINK_MCU_ESP32 (FREEINK_DEVICE_M5PAPER)
 #if (FREEINK_MCU_C3 + FREEINK_MCU_S3 + FREEINK_MCU_ESP32) != 1
 #error \
@@ -85,7 +89,7 @@
 // X4 Pro is a distinct ESP32-S3 device (NOT the C3 X4): same SSD1677 controller and
 // 800x480 panel as X4/de-link/Sticky, recovered from its OEM firmware dump — see
 // docs/xteink-x4pro-support.md.
-#if FREEINK_DEVICE_X4 || FREEINK_DEVICE_DELINK || FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO
+#if FREEINK_DEVICE_X4 || FREEINK_DEVICE_DELINK || FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_PICCO
 #define FREEINK_DRIVER_SSD1677 1
 #else
 #define FREEINK_DRIVER_SSD1677 0
@@ -156,11 +160,11 @@
 #ifndef FREEINK_CAP_TOUCH
 #define FREEINK_CAP_TOUCH                                                                         \
   (FREEINK_DEVICE_MURPHY || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_M5PAPER || FREEINK_DEVICE_STICKY || \
-   FREEINK_DEVICE_X4PRO)
+   FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_PICCO)
 #endif
 #ifndef FREEINK_CAP_FRONTLIGHT
 #define FREEINK_CAP_FRONTLIGHT \
-  (FREEINK_DEVICE_DELINK || FREEINK_DEVICE_MURPHY || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_X4PRO)
+  (FREEINK_DEVICE_DELINK || FREEINK_DEVICE_MURPHY || FREEINK_DEVICE_LILYGO || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_PICCO)
 #endif
 // USB Mass Storage ("USB Transfer" mode): exposes the SD card to a host over
 // USB-MSC. OPT-IN (default off), NOT board-derived: it forces the build into
@@ -228,7 +232,7 @@
 // On-board I2C sensors. Each lib (Rtc / EnvironmentSensor / Imu) compiles its
 // I2C driver only when its flag is set; otherwise it links stub bodies.
 #ifndef FREEINK_CAP_RTC
-#define FREEINK_CAP_RTC (FREEINK_DEVICE_X3 || FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO)
+#define FREEINK_CAP_RTC (FREEINK_DEVICE_X3 || FREEINK_DEVICE_STICKY || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_PICCO)
 #endif
 #ifndef FREEINK_CAP_TEMP_HUMIDITY
 #define FREEINK_CAP_TEMP_HUMIDITY (FREEINK_DEVICE_STICKY)
@@ -269,7 +273,7 @@
 // must define USE_BLOCK_DEVICE_INTERFACE=1 for the SdFat FsVolume these mount on.
 // Override with -DFREEINK_SD_SDMMC=0/1.
 #ifndef FREEINK_SD_SDMMC
-#define FREEINK_SD_SDMMC (FREEINK_DEVICE_DELINK || FREEINK_DEVICE_X4PRO)
+#define FREEINK_SD_SDMMC (FREEINK_DEVICE_DELINK || FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_PICCO)
 #endif
 
 // Serial log transport hint for consumer firmware. Boards can share the same MCU
@@ -319,6 +323,7 @@ enum class Board : uint8_t {
   LilyGoT5S3,
   M5PaperV11,
   Sticky,
+  Picco,  // Onyx Picco / BOOX Tiles: ESP32-S3, SSD1677/SSD2677 800x480, TMA525C touch
 };
 
 // How the board reports button presses.
@@ -343,7 +348,7 @@ enum class InputStyle : uint8_t {
 enum class DisplayController : uint8_t { SSD1677, UC8253, ED2208, LgfxEpd, IT8951, UC8279, UC8179 };
 
 // Optional capacitive touch controller.
-enum class TouchController : uint8_t { None, Chsc6x, Gt911 };
+enum class TouchController : uint8_t { None, Chsc6x, Gt911, Tma525c };  // Tma525c: Picco (PIP protocol)
 
 // Optional audio output path. Murphy M3 ships an ES8388-compatible stereo
 // codec (I2S slave, control over the shared touch I2C bus) — the contract was
@@ -1168,6 +1173,61 @@ constexpr BoardProfile XTEINK_X4_PRO = {
     // button ladder — that earlier assumption was wrong; the ladder pins remain unconfirmed.
     {1}};
 
+#if FREEINK_DEVICE_PICCO
+// --- Onyx Picco / BOOX Tiles — ESP32-S3 (16MB flash, 8MB octal PSRAM), SSD1677/2677 ---
+// Ported from upstream freeink-sdk 5e94fe7 (PICCO profile, recovered from the retail
+// firmware by reverse-engineering). Fields our BoardProfile lacks (slide switch,
+// SGM41562 charger type, I2C frontlight) live in namespace Picco below so the
+// struct layout of every other board is unchanged.
+constexpr BoardProfile PICCO = {
+    Board::Picco,
+    "picco",
+    InputStyle::DigitalButtons,
+    DisplayController::SSD1677,  // SSD1677/SSD2677 auto-detected by the driver over the bus
+    800,
+    480,
+    // SCLK48 MOSI/SDA47 CS18 DC17 RST16 BUSY15; no MISO, no panel power-enable GPIO.
+    {48, 47, 18, 17, 16, 15, PIN_UNASSIGNED},
+    20000000,  // displaySpiHz: the stock firmware's SPI2 device clock
+    // SD is 4-bit SDMMC (sdmmc below); powerEnable = GPIO0, an ACTIVE-LOW peripheral
+    // rail that also feeds the sensor bus. Mounted without the X4 Pro power cycle.
+    {PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED, 0, false, 0, false},
+    // power/wake = GPIO2 (active-low), Up = GPIO21, Down = GPIO9, GPIO5 carried as confirm.
+    {PIN_UNASSIGNED, 5, PIN_UNASSIGNED, PIN_UNASSIGNED, 21, 9, 2, false},
+    1,               // batteryAdc: GPIO1 (x2 divider)
+    PIN_UNASSIGNED,  // batteryChargeStatus: charge state comes from the SGM41562
+    2.0f,
+    PIN_UNASSIGNED,  // usbDetect
+    // Parade TMA525C @ 0x24 on the shared bus SDA7/SCL8, RST=10, INT=11 active-low.
+    // Native digitizer is 480x800 portrait on the 800x480 panel: swapXY + flipY.
+    {TouchController::Tma525c, 7, 8, 11, 10, 0x24, 0, 799, 0, 479, false, 0, true, false, PIN_UNASSIGNED, true,
+     false, true},
+    NO_FRONTLIGHT,  // the frontlight is the I2C driver in Picco::frontlight
+    NO_AUDIO,
+    NO_LEDS,
+    NO_FLIP,  // portrait rotation is app-side
+    {41, 42, 40, 39, 44, 43, 4},  // SDMMC 4-bit: CLK41 CMD42 D0=40 D1=39 D2=44 D3=43
+    NO_GAUGE,                     // ADC battery; SGM41562 charger in Picco::charger
+    NO_MIC,
+    // Shared I2C bus SDA7/SCL8 @400k: BM8563/PCF8563-class RTC @0x51 (IMU not used).
+    {7, 8, 400000, 0x51, 0, 0, 0, RtcType::Pcf8563, ImuType::None},
+    1.2f,
+    {4}};  // power.latch0 = GPIO4: stock drives it HIGH at boot and holds it through deep sleep
+
+static_assert(PICCO.displayWidth / 8 * PICCO.displayHeight == 48000,
+              "Picco framebuffer must be 48,000 bytes (800/8 x 480)");
+
+namespace Picco {
+constexpr int8_t toggleSwitch = 6;  // slide switch, INPUT_PULLUP, "on" = LOW
+// SGM41562 charger on the shared bus.
+constexpr int8_t i2cSda = 7;
+constexpr int8_t i2cScl = 8;
+constexpr uint32_t i2cHz = 400000;
+constexpr uint8_t chargerAddr = 0x03;
+constexpr uint8_t frontlightAddr = 0x38;  // dual-channel warm/cool LED driver
+}  // namespace Picco
+#endif
+
 // Largest framebuffer (bytes) over the devices compiled into this build, derived
 // from the profiles above. The display facade sizes its static framebuffer to
 // this so one binary holds whichever panel is runtime-selected; a single-device
@@ -1185,7 +1245,13 @@ constexpr uint32_t MAX_FRAMEBUFFER_BYTES = cmax(
                    FREEINK_DEVICE_LILYGO ? panelBytes(LILYGO_T5S3) : 0u),
               cmax(FREEINK_DEVICE_M5PAPER ? panelBytes(M5PAPER_V11) : 0u,
                    FREEINK_DEVICE_X4PRO ? panelBytes(XTEINK_X4_PRO) : 0u)),
-         FREEINK_DEVICE_STICKY ? panelBytes(STICKY) : 0u));
+         cmax(FREEINK_DEVICE_STICKY ? panelBytes(STICKY) : 0u,
+#if FREEINK_DEVICE_PICCO
+              panelBytes(PICCO)
+#else
+              0u
+#endif
+                  )));
 
 // Compile-time default device — the profile ACTIVE starts as. With a single
 // device in the build this is the only device; with several same-MCU devices it
@@ -1204,6 +1270,8 @@ constexpr BoardProfile DEFAULT_DEVICE = M5PAPER_V11;
 constexpr BoardProfile DEFAULT_DEVICE = STICKY;
 #elif FREEINK_DEVICE_X4PRO
 constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X4_PRO;
+#elif FREEINK_DEVICE_PICCO
+constexpr BoardProfile DEFAULT_DEVICE = PICCO;
 #elif FREEINK_DEVICE_X3 && !FREEINK_DEVICE_X4
 constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X3;  // X3-only binary
 #else
@@ -1218,6 +1286,7 @@ constexpr BoardProfile DEFAULT_DEVICE = XTEINK_X4;
 inline BoardProfile ACTIVE = DEFAULT_DEVICE;
 
 inline void holdPowerRails();  // defined below; used by selectDevice()
+inline void releaseSdRail();   // defined below; used by holdPowerRails() on Picco
 
 // Set ACTIVE to one of the devices compiled into this build. Returns false (and
 // leaves ACTIVE unchanged) if `which` was not included via -DFREEINK_DEVICE_*.
@@ -1271,6 +1340,11 @@ inline bool selectDevice(Board which) {
       ACTIVE = XTEINK_X4_PRO;
       break;
 #endif
+#if FREEINK_DEVICE_PICCO
+    case Board::Picco:
+      ACTIVE = PICCO;
+      break;
+#endif
     default:
       return false;
   }
@@ -1288,6 +1362,7 @@ inline bool isDeLink() { return ACTIVE.board == Board::DeLink; }
 inline bool isM5PaperV11() { return ACTIVE.board == Board::M5PaperV11; }
 inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
 inline bool isX4Pro() { return ACTIVE.board == Board::XteinkX4Pro; }
+inline bool isPicco() { return ACTIVE.board == Board::Picco; }
 inline bool hasTouch() { return ACTIVE.touch.controller != TouchController::None; }
 inline bool hasHomeKey() { return ACTIVE.touch.hasHomeKey; }
 inline bool hasPwmFrontlight() { return ACTIVE.frontlight.gpio != PIN_UNASSIGNED; }
@@ -1336,6 +1411,11 @@ inline void holdPowerRails() {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, HIGH);
   }
+#if FREEINK_DEVICE_PICCO
+  // Picco: the GPIO0 enable carried as sd.powerEnable also feeds the sensor bus
+  // (RTC NACKs until it is on); stock turns it on before the RTC init.
+  if (isPicco()) releaseSdRail();
+#endif
 }
 
 // Rescue the SD power rail before first display use. A previous firmware's

@@ -82,6 +82,13 @@ bool SdmmcBlockDevice::begin(const BoardConfig::SdmmcPins& pins) {
   // block I/O works, and GPIO5 is left in the exact LOW state that read succeeded under.
   esp_err_t mountErr = ESP_FAIL;
   for (int attempt = 0; attempt < 4; attempt++) {
+#if FREEINK_DEVICE_PICCO
+    // Picco: GPIO0 also powers the shared touch/RTC/charger bus — keep it on,
+    // as stock does, instead of the X4 Pro power cycle.
+    if (sdPwr >= 0 && BoardConfig::isPicco()) {
+      digitalWrite(sdPwr, BoardConfig::ACTIVE.sd.powerActiveHigh ? HIGH : LOW);
+    } else
+#endif
     if (sdPwr >= 0) {
       digitalWrite(sdPwr, HIGH);
       delay(80);

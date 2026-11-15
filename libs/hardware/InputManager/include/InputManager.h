@@ -226,6 +226,10 @@ private:
   void beginGt911();
   bool gt911ReadReg(uint16_t reg, uint8_t *buf, uint8_t len);
   void gt911ClearStatus();
+#if FREEINK_DEVICE_PICCO
+  void beginTma525c();               // Onyx Picco Parade TMA525C (I2C 0x24) init/reset
+  void pollTma525c(unsigned long now);
+#endif
 
   uint8_t currentState;
   uint8_t lastState;

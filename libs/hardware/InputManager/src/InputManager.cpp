@@ -673,6 +673,12 @@ void InputManager::beginTouch() {
     beginGt911();
     return;
   }
+#if FREEINK_DEVICE_PICCO
+  if (t.controller == BoardConfig::TouchController::Tma525c) {
+    beginTma525c();
+    return;
+  }
+#endif
   // CHSC6x: I2C bus only. The IRQ is left unconfigured — it's a brief pulse on
   // this controller, so detection polls I2C and gates on the frame's touch bit
   // instead (see decodeChsc6xFrame / updateTouchFromIrq).
@@ -694,6 +700,10 @@ uint8_t InputManager::serviceTouch() {
 
   if (t.controller == BoardConfig::TouchController::Gt911) {
     pollGt911(now);
+#if FREEINK_DEVICE_PICCO
+  } else if (t.controller == BoardConfig::TouchController::Tma525c) {
+    pollTma525c(now);
+#endif
   } else {
     updateTouchFromIrq(now, 0); // detection polls I2C; the IRQ is unused now
     // Synthesized confirm tracks an actually-detected press, not the IRQ line.
@@ -1026,5 +1036,186 @@ void InputManager::pollGt911(const unsigned long now) {
 
   gt911ClearStatus(); // GT911 requires clearing 0x814E after each read
 }
+
+#if FREEINK_DEVICE_PICCO
+// --- Onyx Picco: Parade/Cypress TMA525C (PIP protocol) -----------------------
+// Single-touch port of upstream freeink-sdk 5e94fe7 (recovered from the stock
+// firmware). Every read is a 2-byte LE length followed by a re-read of the whole
+// report; zero length = nothing pending. Touch reports (ID 0x01) carry the record
+// count in byte 5 bits 0-4 and 10-byte records from byte 7: rec[1] bits 0-4 = id,
+// bits 5-6 = event (3 = lift-off), rec[2..3] = X, rec[4..5] = Y. Stock inverts
+// both against the native 480x800 portrait digitizer.
+namespace {
+constexpr uint16_t PICCO_TOUCH_W = 480;
+constexpr uint16_t PICCO_TOUCH_H = 800;
+constexpr uint8_t PICCO_REPORT_TOUCH = 0x01;
+constexpr uint8_t PICCO_MODE_APP = 0xF7;
+constexpr uint8_t PICCO_MODE_BOOTLOADER = 0xFF;
+constexpr unsigned long PICCO_TOUCH_STALE_MS = 3000;
+
+uint16_t piccoReadReport(uint8_t addr, uint8_t *buf, uint16_t cap) {
+  if (Wire.requestFrom(addr, static_cast<uint8_t>(2),
+                       static_cast<uint8_t>(true)) != 2)
+    return 0;
+  const uint8_t low = Wire.read();
+  const uint16_t len = low | (static_cast<uint16_t>(Wire.read()) << 8);
+  if (len < 2 || len > cap)
+    return 0;
+  const uint8_t got = Wire.requestFrom(addr, static_cast<uint8_t>(len),
+                                       static_cast<uint8_t>(true));
+  for (uint8_t i = 0; i < got; ++i)
+    buf[i] = Wire.read();
+  return got == len ? len : 0;
+}
+
+bool piccoWaitInt(int8_t irq, unsigned long timeoutMs) {
+  const unsigned long start = millis();
+  while (irq >= 0 && digitalRead(irq) != LOW) {
+    if (millis() - start > timeoutMs)
+      return false;
+    delay(1);
+  }
+  return true;
+}
+
+// CRC-16/CCITT-FALSE: the PIP bootloader packet CRC.
+uint16_t piccoCrc(const uint8_t *p, size_t n) {
+  uint16_t crc = 0xFFFF;
+  while (n--) {
+    crc ^= static_cast<uint16_t>(*p++) << 8;
+    for (uint8_t b = 0; b < 8; ++b)
+      crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+  }
+  return crc;
+}
+} // namespace
+
+void InputManager::beginTma525c() {
+  const auto &t = BoardConfig::ACTIVE.touch;
+  if (t.sda < 0 || t.scl < 0 || t.i2cAddress == 0)
+    return;
+  if (t.irq >= 0)
+    pinMode(t.irq, INPUT_PULLUP); // active-low data-ready
+  Wire.begin(t.sda, t.scl, 400000);
+  Wire.setTimeOut(10);
+  // Stock reset: HIGH, 1 ms, LOW 10 ms, HIGH, then 50 ms.
+  if (t.reset >= 0) {
+    pinMode(t.reset, OUTPUT);
+    digitalWrite(t.reset, HIGH);
+    delay(1);
+    digitalWrite(t.reset, LOW);
+    delay(10);
+    digitalWrite(t.reset, HIGH);
+    delay(50);
+  }
+  uint8_t buf[128];
+  for (int i = 0; i < 4 && t.irq >= 0 && digitalRead(t.irq) == LOW; ++i) {
+    delay(100);
+    piccoReadReport(t.i2cAddress, buf, sizeof(buf));
+  }
+  // HID descriptor read (register 0x0001): byte 2 of the reply is the mode.
+  uint8_t mode = 0;
+  for (int attempt = 0; attempt < 3 && mode == 0; ++attempt) {
+    Wire.beginTransmission(t.i2cAddress);
+    Wire.write(0x01);
+    Wire.write(0x00);
+    if (Wire.endTransmission() != 0) {
+      delay(120);
+      continue;
+    }
+    if (piccoWaitInt(t.irq, 500) &&
+        piccoReadReport(t.i2cAddress, buf, sizeof(buf)) >= 3)
+      mode = buf[2];
+  }
+  if (mode == PICCO_MODE_BOOTLOADER) {
+    // Launch the application: SOP(01) cmd(3B) len(0000) crc(LE) EOP(17).
+    uint8_t pkt[] = {0x04, 0x00, 0x0B, 0x00, 0x40, 0x00, 0x01,
+                     0x3B, 0x00, 0x00, 0x00, 0x00, 0x17};
+    const uint16_t crc = piccoCrc(&pkt[6], 4);
+    pkt[10] = crc & 0xFF;
+    pkt[11] = crc >> 8;
+    Wire.beginTransmission(t.i2cAddress);
+    Wire.write(pkt, sizeof(pkt));
+    Wire.endTransmission();
+    if (piccoWaitInt(t.irq, 500))
+      piccoReadReport(t.i2cAddress, buf, sizeof(buf));
+    mode = PICCO_MODE_APP;
+  }
+  touchDataEnabled = (mode == PICCO_MODE_APP);
+#ifdef TOUCH_PROBE_DEBUG
+  touchDebugPrintf("[touch] Picco TMA525C mode=0x%02X enabled=%d\r\n", mode,
+                   touchDataEnabled);
+#endif
+}
+
+void InputManager::pollTma525c(const unsigned long now) {
+  const auto &t = BoardConfig::ACTIVE.touch;
+  auto release = [&]() {
+    if (touchPressed) {
+      touchReleasedEvent = true;
+      lastTouchHeldDurationMs = now - touchDownPoint.timestamp;
+      touchUpPoint = touchPoint;
+    }
+    touchPressed = false;
+    touchPoint.valid = false;
+  };
+  // INT low = report pending. Release comes from the lift-off record; the
+  // hold-over is only a safety net for a missed lift-off.
+  if (t.irq >= 0 && digitalRead(t.irq) != LOW) {
+    if (touchPressed && now - touchPoint.timestamp >= PICCO_TOUCH_STALE_MS)
+      release();
+    return;
+  }
+  uint8_t buf[128];
+  const uint16_t len = piccoReadReport(t.i2cAddress, buf, sizeof(buf));
+  if (len < 7 || buf[2] != PICCO_REPORT_TOUCH)
+    return;
+  const uint8_t count = buf[5] & 0x1F;
+  if (len < 7 + count * 10)
+    return; // truncated frame: never reinterpret it as a tap or release
+  // First live (non lift-off) contact drives the single-touch state.
+  const uint8_t *live = nullptr;
+  for (uint8_t i = 0; i < count && !live; ++i) {
+    const uint8_t *rec = &buf[7 + i * 10];
+    if (((rec[1] >> 5) & 0x03) != 3)
+      live = rec;
+  }
+  if (!live) {
+    release();
+    return;
+  }
+  const uint16_t x =
+      static_cast<uint16_t>(live[2]) | (static_cast<uint16_t>(live[3]) << 8);
+  const uint16_t y =
+      static_cast<uint16_t>(live[4]) | (static_cast<uint16_t>(live[5]) << 8);
+  if (x > PICCO_TOUCH_W || y > PICCO_TOUCH_H)
+    return;
+  const uint16_t px = PICCO_TOUCH_W - x; // stock orientation
+  const uint16_t py = PICCO_TOUCH_H - y;
+  const uint16_t sx = t.swapXY ? py : px;
+  const uint16_t sy = t.swapXY ? px : py;
+  touchPoint.valid = true;
+  touchPoint.x = mapTouchAxis(sx, t.rawMinX, t.rawMaxX, t.rawMaxX - t.rawMinX);
+  touchPoint.y = mapTouchAxis(sy, t.rawMinY, t.rawMaxY, t.rawMaxY - t.rawMinY);
+  if (t.flipX)
+    touchPoint.x = static_cast<uint16_t>((t.rawMaxX - t.rawMinX) - touchPoint.x);
+  if (t.flipY)
+    touchPoint.y = static_cast<uint16_t>((t.rawMaxY - t.rawMinY) - touchPoint.y);
+  touchPoint.timestamp = now;
+  if (!touchPressed) {
+    touchPressedEvent = true;
+    touchDownPoint = touchPoint;
+    touchMovedBeyondTapSlop = false;
+  }
+  touchUpPoint = touchPoint;
+  const int dx =
+      static_cast<int>(touchUpPoint.x) - static_cast<int>(touchDownPoint.x);
+  const int dy =
+      static_cast<int>(touchUpPoint.y) - static_cast<int>(touchDownPoint.y);
+  if (absInt(dx) > TOUCH_TAP_SLOP_PX || absInt(dy) > TOUCH_TAP_SLOP_PX)
+    touchMovedBeyondTapSlop = true;
+  touchPressed = true;
+}
+#endif // FREEINK_DEVICE_PICCO
 
 #endif // FREEINK_CAP_TOUCH
