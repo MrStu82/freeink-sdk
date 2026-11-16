@@ -791,18 +791,6 @@ void FreeInkDisplay::displayWindow(uint16_t x, uint16_t y, uint16_t w, uint16_t 
 #endif
 }
 
-#if FREEINK_DEVICE_PICCO
-bool FreeInkDisplay::displayPiccoWindow(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
-  if (_inverted || _inversionDirty) return false;
-  syncPendingAsync();
-  const bool ok = _driver->displayPiccoWindow(_bus, frameBuffer, x, y, w, h);
-#ifdef EINK_DISPLAY_SINGLE_BUFFER_MODE
-  _shadowValid = false;
-#endif
-  return ok;
-}
-#endif
-
 void FreeInkDisplay::displayGrayBuffer(bool turnOffScreen, const unsigned char* lut, bool factoryMode) {
 #if defined(SSD1677_PROBE_DEBUG) && SSD1677_PROBE_DEBUG
   Serial.printf("[EPD] displayGrayBuffer\n");
