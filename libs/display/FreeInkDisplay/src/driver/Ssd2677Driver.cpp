@@ -40,6 +40,12 @@ constexpr uint8_t CMD_POWER_OFF = 0x02;
 constexpr uint8_t CMD_REFRESH = 0x12;
 constexpr uint8_t CMD_DEEP_SLEEP = 0x07;
 constexpr uint16_t LUT_LEN = 535;
+constexpr uint8_t CMD_WINDOW = 0x83;
+static_assert(kPiccoInit[1].cmd == CMD_WINDOW, "kPiccoInit[1] is the full-panel window");
+// Window y as the init window places it: rows 0.. start at gate 0xC8.
+constexpr uint16_t kWindowGateY = 0xC8;
+// A fast waveform takes well under this; longer means the BUSY wait timed out.
+constexpr unsigned long kWindowRefreshMaxMs = 3000;
 
 // 8 pixels of old + new -> two bytes of 2-bit pixels, old in the high bit,
 // MSB-first (stock FUN_422869b4).
@@ -95,6 +101,52 @@ void Ssd2677Driver::display(EpdBus& bus, const uint8_t* fb, const uint8_t* prev,
   if (_old) memcpy(_old, fb, geometry().bufferSize);
   _needsInitialFull = false;
 }
+
+// Stock never drives a sub-panel window (its setWindow 0x4200c598 has no display
+// caller); bytes follow that setWindow: xs, xe, ys, ye (16-bit BE) + 0x00. The RAM
+// write stays the stock full-frame 0x10 burst under the full window, so RAM is
+// right whatever 0x83 does; only the refresh runs in the window. The refresh is
+// stock mode 3 with powerOff=0 (FUN_4200c950): mode-3 LUT, 0x04 only if off, 0x12,
+// no 0x02 — endPiccoWindow() sends the one 0x02. The full window is restored
+// before returning, and every other refresh loads its own LUT, so display() sees
+// the init state. On failure the panel is powered off here too.
+bool Ssd2677Driver::displayPiccoWindow(EpdBus& bus, const uint8_t* fb, uint16_t x, uint16_t y, uint16_t w,
+                                       uint16_t h) {
+  const PanelGeometry g = geometry();
+  if (_needsInitialFull || !_old || w == 0 || h == 0 || ((x | w) & 7) || x + w > g.width || y + h > g.height)
+    return false;
+  sendPacked(bus, _old, fb);
+  const uint16_t xe = x + w - 1;
+  const uint16_t ys = kWindowGateY + y;
+  const uint16_t ye = ys + h - 1;
+  const uint8_t win[9] = {static_cast<uint8_t>(x >> 8),  static_cast<uint8_t>(x),  static_cast<uint8_t>(xe >> 8),
+                          static_cast<uint8_t>(xe),      static_cast<uint8_t>(ys >> 8), static_cast<uint8_t>(ys),
+                          static_cast<uint8_t>(ye >> 8), static_cast<uint8_t>(ye), 0x00};
+  bus.cmd(CMD_WINDOW);
+  bus.data(win, sizeof(win));
+  const unsigned long start = millis();
+  bus.cmd(CMD_LUT);
+  bus.data(lut_picco_se0400_track, LUT_LEN);
+  if (_needsPowerOn) {
+    bus.cmd(CMD_POWER_ON);
+    bus.waitBusy(" SSD2677 power on");
+    _needsPowerOn = false;
+  }
+  bus.cmd(CMD_REFRESH);
+  bus.data(0x00);
+  bus.waitRefreshComplete("window refresh");
+  const bool ok = millis() - start < kWindowRefreshMaxMs;
+  bus.cmd(CMD_WINDOW);
+  bus.data(kPiccoInit[1].data, kPiccoInit[1].len);
+  for (uint16_t row = y; row < y + h; ++row) {
+    const uint32_t off = static_cast<uint32_t>(row) * g.widthBytes + x / 8;
+    memcpy(_old + off, fb + off, w / 8);
+  }
+  if (!ok) powerOffBetweenFrames(bus);
+  return ok;
+}
+
+void Ssd2677Driver::endPiccoWindow(EpdBus& bus) { powerOffBetweenFrames(bus); }
 
 void Ssd2677Driver::sendPacked(EpdBus& bus, const uint8_t* hi, const uint8_t* lo) {
   const PanelGeometry g = geometry();

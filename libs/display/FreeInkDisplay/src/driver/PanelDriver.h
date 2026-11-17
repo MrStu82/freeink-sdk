@@ -51,6 +51,19 @@ class PanelDriver {
   // Called only after the host's complete frame (including grayscale) finishes.
   // Retain controller RAM and the partial-refresh baseline; never reset/sleep.
   virtual void powerOffBetweenFrames(EpdBus& bus) { (void)bus; }
+  // Refresh limited to an x/w 8-aligned memory rect, panel left powered; false =
+  // not done (the caller falls back to a full-frame refresh). Picco edge cue only.
+  virtual bool displayPiccoWindow(EpdBus& bus, const uint8_t* fb, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    (void)bus;
+    (void)fb;
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    return false;
+  }
+  // Ends a run of displayPiccoWindow() calls: powers the panel off (one 0x02).
+  virtual void endPiccoWindow(EpdBus& bus) { (void)bus; }
 #endif
 
   // --- core paint path (load RAM + refresh) ---
